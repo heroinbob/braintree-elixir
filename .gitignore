@@ -7,3 +7,5 @@ erl_crash.dump
 TODO
 config/*.secret.exs
 .tool-versions
+.env
+.elixir-tools/
