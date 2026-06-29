@@ -1,4 +1,7 @@
 defmodule Braintree.Test.HTTP do
+  @moduledoc """
+  Logic for working with HTTP requests in a test.
+  """
   alias Braintree.HTTP.MockAdapter
   alias Braintree.Test.Support.ConfigHelper
   alias ExUnit.Assertions
@@ -26,15 +29,17 @@ defmodule Braintree.Test.HTTP do
     password = Application.fetch_env!(:braintree, :private_key)
 
     for value <- [
-      {"accept", "application/xml"},
-      {"accept-encoding", "gzip"},
-      {"authorization", "Basic #{:base64.encode("#{username}:#{password}")}"},
-      {"content-type", "application/xml"},
-      {"user-agent", "Braintree Elixir/0.1"},
-      {"x-apiversion", "4"}
-    ] do
-      Assertions.assert Enum.any?(headers, & &1 == value),
+          {"accept", "application/xml"},
+          {"accept-encoding", "gzip"},
+          {"authorization", "Basic #{:base64.encode("#{username}:#{password}")}"},
+          {"content-type", "application/xml"},
+          {"user-agent", "Braintree Elixir/0.1"},
+          {"x-apiversion", "4"}
+        ] do
+      Assertions.assert(
+        Enum.any?(headers, &(&1 == value)),
         "expected #{inspect(value)} to be present in #{inspect(headers)}"
+      )
     end
   end
 
@@ -42,9 +47,10 @@ defmodule Braintree.Test.HTTP do
 
   def expect(call, expectation), do: Hammox.expect(MockAdapter, call, expectation)
 
-  def expect_request(expectation) when is_function(expectation, 2) or
-    is_function(expectation, 3) or
-    is_function(expectation, 4) do
+  def expect_request(expectation)
+      when is_function(expectation, 2) or
+             is_function(expectation, 3) or
+             is_function(expectation, 4) do
     expect(:request, expectation)
   end
 

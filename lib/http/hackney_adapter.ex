@@ -17,7 +17,7 @@ defmodule Braintree.HTTP.HackneyAdapter do
     api_version_header(),
     accept_encoding_header(),
     content_type_header(),
-    user_agent_header(),
+    user_agent_header()
   ]
 
   @impl Braintree.HTTP.AdapterBehaviour
@@ -30,12 +30,12 @@ defmodule Braintree.HTTP.HackneyAdapter do
       url = build_url(path, opts)
 
       case :hackney.request(
-        method,
-        url,
-        [get_auth_header(opts) | @headers],
-        encode_body(body),
-        build_options([{:url, url} | opts])
-      ) do
+             method,
+             url,
+             [get_auth_header(opts) | @headers],
+             encode_body(body),
+             build_options([{:url, url} | opts])
+           ) do
         {:ok, code, _headers, body} when code in 200..299 ->
           duration = System.monotonic_time() - start_time
           emit_stop(duration, method, path, code)
@@ -51,10 +51,9 @@ defmodule Braintree.HTTP.HackneyAdapter do
           emit_stop(duration, method, path, 422)
 
           with {:ok, xml} <- decode_xml(body),
-            resolved <- resolve_error_response(xml) do
+               resolved <- resolve_error_response(xml) do
             {:error, resolved}
           end
-
 
         {:ok, code, _headers, _body} when code in 400..504 ->
           duration = System.monotonic_time() - start_time

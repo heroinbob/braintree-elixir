@@ -11,11 +11,11 @@ defmodule Braintree.HTTP.TelemetryTest do
       reason = RuntimeError.exception("test")
 
       assert Telemetry.emit_error(
-        42,
-        :get,
-        "path",
-        reason
-      ) == :ok
+               42,
+               :get,
+               "path",
+               reason
+             ) == :ok
 
       assert_receive {
         ^scope,
@@ -33,11 +33,11 @@ defmodule Braintree.HTTP.TelemetryTest do
       error_data = RuntimeError.exception("test")
 
       assert Telemetry.emit_exception(
-        42,
-        :get,
-        "path",
-        error_data
-      ) == :ok
+               42,
+               :get,
+               "path",
+               error_data
+             ) == :ok
 
       assert_receive {
         ^scope,
@@ -62,7 +62,8 @@ defmodule Braintree.HTTP.TelemetryTest do
         %{method: :get, path: "path"}
       }
 
-      diff = System.system_time(:millisecond) - System.convert_time_unit(time, :native, :millisecond)
+      diff =
+        System.system_time(:millisecond) - System.convert_time_unit(time, :native, :millisecond)
 
       assert diff >= 0 and diff <= 100
     end

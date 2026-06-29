@@ -46,7 +46,7 @@ defmodule Braintree.HTTP.ReqAdapter do
         body: body,
         method: method,
         opts: opts,
-        path: path,
+        path: path
       }
       |> build_options()
       |> build_client()
@@ -90,11 +90,11 @@ defmodule Braintree.HTTP.ReqAdapter do
   end
 
   defp build_options(%{
-    body: body,
-    method: method,
-    opts: runtime_opts,
-    path: path,
-  }) do
+         body: body,
+         method: method,
+         opts: runtime_opts,
+         path: path
+       }) do
     [
       auth: {:basic, get_auth_token(runtime_opts)},
       # The encode_body step doesn't support setting a custom encoder. So we have
@@ -126,12 +126,10 @@ defmodule Braintree.HTTP.ReqAdapter do
   defp add_ssl_options(opts, override_opts) do
     Keyword.merge(
       opts,
-      [
-        connect_options: [
-          transport_opts: [
-            cacertfile: get_cacertfile_path(override_opts),
-            verify: :verify_peer
-          ]
+      connect_options: [
+        transport_opts: [
+          cacertfile: get_cacertfile_path(override_opts),
+          verify: :verify_peer
         ]
       ]
     )
@@ -163,9 +161,9 @@ defmodule Braintree.HTTP.ReqAdapter do
   end
 
   defp error_telemetry_step({
-    %Req.Request{method: method, options: %{telemetry: telemetry}} = request,
-    %Req.TransportError{reason: reason} = error
-  }) do
+         %Req.Request{method: method, options: %{telemetry: telemetry}} = request,
+         %Req.TransportError{reason: reason} = error
+       }) do
     emit_error(
       System.monotonic_time() - telemetry.start_time,
       method,
@@ -177,9 +175,9 @@ defmodule Braintree.HTTP.ReqAdapter do
   end
 
   defp stop_telemetry_step({
-    %Req.Request{method: method, options: %{telemetry: telemetry}} = request,
-    %Req.Response{status: status} = response
-  }) do
+         %Req.Request{method: method, options: %{telemetry: telemetry}} = request,
+         %Req.Response{status: status} = response
+       }) do
     emit_stop(
       System.monotonic_time() - telemetry.start_time,
       method,

@@ -4,9 +4,9 @@ defmodule Braintree.HTTP.Error do
   """
 
   @type t :: %__MODULE__{
-    message: String.t(),
-    error: any()
-  }
+          message: String.t(),
+          error: any()
+        }
 
   defexception [:message, :error]
 end

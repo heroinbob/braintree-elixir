@@ -113,7 +113,10 @@ defmodule Braintree.HTTP.RequestsTest do
     end
 
     test "builds a url from provided options" do
-      assert Requests.build_url("customer", environment: "production", merchant_id: "opts_merchant_id") =~
+      assert Requests.build_url("customer",
+               environment: "production",
+               merchant_id: "opts_merchant_id"
+             ) =~
                "api.braintreegateway.com/merchants/opts_merchant_id/customer"
     end
 

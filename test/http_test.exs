@@ -54,11 +54,11 @@ defmodule Braintree.HTTPTest do
         response = {:ok, %{"foo" => "bar"}}
         opts = [timeout: 500]
 
-        Test.HTTP.expect_request(fn method, path, body, opts ->
+        Test.HTTP.expect_request(fn method, path, body, received_opts ->
           assert method == unquote(test_method)
           assert path == request_path
           assert body == payload
-          assert opts == opts
+          assert opts == received_opts
 
           response
         end)

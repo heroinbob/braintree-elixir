@@ -1,5 +1,5 @@
 defmodule Braintree.HTTP.Telemetry do
-  @moduledoc"""
+  @moduledoc """
   Context for working with HTTP telemetry.
   """
 
@@ -15,11 +15,11 @@ defmodule Braintree.HTTP.Telemetry do
   end
 
   @spec emit_exception(
-    duration :: non_neg_integer(),
-    method :: method(),
-    path :: String.t(),
-    error_data :: term()
-  ) :: :ok
+          duration :: non_neg_integer(),
+          method :: method(),
+          path :: String.t(),
+          error_data :: term()
+        ) :: :ok
   def emit_exception(duration, method, path, error_data) do
     :telemetry.execute(
       [:braintree, :request, :exception],
@@ -29,11 +29,11 @@ defmodule Braintree.HTTP.Telemetry do
   end
 
   @spec emit_error(
-    duration :: non_neg_integer(),
-    method :: method(),
-    path :: String.t(),
-    error_reason :: term()
-  ) :: :ok
+          duration :: non_neg_integer(),
+          method :: method(),
+          path :: String.t(),
+          error_reason :: term()
+        ) :: :ok
   def emit_error(duration, method, path, error_reason) do
     :telemetry.execute(
       [:braintree, :request, :error],
@@ -43,11 +43,11 @@ defmodule Braintree.HTTP.Telemetry do
   end
 
   @spec emit_stop(
-    duration :: non_neg_integer,
-    method :: method(),
-    path :: String.t(),
-    http_status :: non_neg_integer()
-  ) :: :ok
+          duration :: non_neg_integer,
+          method :: method(),
+          path :: String.t(),
+          http_status :: non_neg_integer()
+        ) :: :ok
   def emit_stop(duration, method, path, http_status) do
     :telemetry.execute(
       [:braintree, :request, :stop],
