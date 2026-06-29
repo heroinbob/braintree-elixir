@@ -25,6 +25,7 @@ defmodule Braintree.HTTP.ReqAdapter do
 
   alias Braintree.HTTP
   alias Braintree.HTTP.Error
+  alias Braintree.XML.Decoder
 
   require Logger
 
@@ -138,7 +139,7 @@ defmodule Braintree.HTTP.ReqAdapter do
   defp decode_xml(body) do
     body
     |> String.trim()
-    |> Braintree.XML.Decoder.load()
+    |> Decoder.load()
   end
 
   defp parse_response(req_response) do
