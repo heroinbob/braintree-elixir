@@ -1,5 +1,5 @@
 # Only include when :hackney is available.
-if match?({:module, :fart}, Code.ensure_compiled(:hackney)) do
+if match?({:module, :hackney}, Code.ensure_compiled(:hackney)) do
   defmodule Braintree.HTTP.HackneyAdapter do
     @moduledoc """
     HTTP adapter that relies on Hackney for transport.
