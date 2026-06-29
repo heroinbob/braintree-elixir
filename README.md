@@ -15,7 +15,7 @@ Add braintree to your list of dependencies in `mix.exs`:
 
 ```elixir
 def deps do
-  [{:braintree, "~> 0.13"}]
+  [{:braintree, "~> 0.16"}]
 end
 ```
 
@@ -161,6 +161,38 @@ If an exception is raised during the Hackney call, an exception event will be fi
  measurements:  %{duration: duration}
  meta data:     %{method: method, path: path, kind: error_type, reason: error_message, stacktrace: stacktrace}
 ```
+
+## Custom HTTP Adapter
+
+The HTTP adapter is configurable and you can change it to whatever you wish. Hackney and Req
+are supported and the adapter is only compiled into the project when it's dependency is defined.
+You only need to define a dependency if the adapter you want to use requires one.
+
+### Choices
+
+`HackneyAdapter` is the default. It relies on `:hackney` which means you only need to specify it in the dependencies
+and everything will work without additional configuration.
+
+`ReqAdapter` is available and relies on `Req`. To use it you must specify `:req` in
+the dependencies and set the `:http_adapter` config option. You can also specify `:http_options` to pass
+adapter specific options. Here's a sample configuration with `ReqAdapter` that provides
+retries on request errors:
+
+```elixir
+def deps do
+  [{:braintree, "~> 0.16"}, {:req "~> 0.6"}]
+end
+
+config :braintree,
+    http_adapter: Braintree.HTTP.ReqAdapter,
+    http_options: [
+        retry: :safe_transient, max_retries: 3
+    ]
+```
+
+For anything other than Hackney or Req you'll need to create your own. To do so you must
+implement the `Braintree.HTTP.AdapterBehaviour` and configure the app using your adapter
+and any dependencies as needed.
 
 ## Testing
 

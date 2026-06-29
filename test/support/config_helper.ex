@@ -24,8 +24,8 @@ defmodule Braintree.Test.Support.ConfigHelper do
       fun.()
     after
       case original do
-        :none -> :ok = Application.delete_env(@app_key, key)
-        _ -> :ok = Braintree.put_env(key, original)
+        :none -> Application.delete_env(@app_key, key)
+        _ -> Braintree.put_env(key, original)
       end
     end
   end
