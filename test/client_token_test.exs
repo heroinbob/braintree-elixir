@@ -21,7 +21,7 @@ defmodule Braintree.ClientTokenTest do
         Plug.Conn.resp(conn, 422, @error_gzip)
       end)
 
-      with_applicaton_config(:sandbox_endpoint, "localhost:#{bypass.port}/", fn ->
+      with_application_config(:sandbox_endpoint, "localhost:#{bypass.port}/", fn ->
         assert {
                  :error,
                  %ErrorResponse{message: "Test Error."}
@@ -36,7 +36,7 @@ defmodule Braintree.ClientTokenTest do
         Plug.Conn.resp(conn, 500, "Something went wrong")
       end)
 
-      with_applicaton_config(:sandbox_endpoint, "localhost:#{bypass.port}/", fn ->
+      with_application_config(:sandbox_endpoint, "localhost:#{bypass.port}/", fn ->
         assert {:error, :server_error} = ClientToken.generate()
       end)
     end
@@ -45,7 +45,7 @@ defmodule Braintree.ClientTokenTest do
       bypass = Bypass.open()
       Bypass.down(bypass)
 
-      with_applicaton_config(:sandbox_endpoint, "localhost:#{bypass.port}/", fn ->
+      with_application_config(:sandbox_endpoint, "localhost:#{bypass.port}/", fn ->
         assert {:error, :econnrefused} = ClientToken.generate()
       end)
     end

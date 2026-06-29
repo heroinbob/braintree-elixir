@@ -1,275 +1,130 @@
 defmodule Braintree.HTTPTest do
-  use ExUnit.Case
+  # Do not use async when usig configuration changes
+  use ExUnit.Case, async: false
 
-  import Braintree.Test.Support.ConfigHelper
-  import ExUnit.CaptureLog
+  alias Braintree.HTTP
+  alias Braintree.Test
 
-  alias Braintree.{ConfigError, HTTP}
+  for test_method <- [:delete, :get, :post, :put] do
+    describe "#{test_method}/1" do
+      test "delegates to the configured adapter" do
+        request_path = "/customers"
+        response = {:ok, %{"foo" => "bar"}}
 
-  defmodule Handler do
-    def attach do
-      :telemetry.attach_many(
-        "braintree-testing",
-        [
-          [:braintree, :request, :start],
-          [:braintree, :request, :stop],
-          [:braintree, :request, :error]
-        ],
-        &__MODULE__.echo_event/4,
-        %{caller: self()}
-      )
-    end
+        Test.HTTP.expect_request(fn method, path, body, opts ->
+          assert method == unquote(test_method)
+          assert path == request_path
+          assert body == %{}
+          assert opts == []
 
-    def echo_event(event, measurements, metadata, config) do
-      send(config.caller, {:event, event, measurements, metadata})
-    end
-  end
-
-  test "build_url/2 builds a url from application config without options" do
-    with_applicaton_config(:merchant_id, "qwertyid", fn ->
-      assert HTTP.build_url("customer", []) =~
-               "sandbox.braintreegateway.com/merchants/qwertyid/customer"
-    end)
-  end
-
-  test "build_url/2 builds a url from provided options" do
-    assert HTTP.build_url("customer", environment: "production", merchant_id: "opts_merchant_id") =~
-             "api.braintreegateway.com/merchants/opts_merchant_id/customer"
-  end
-
-  test "build_url/2 raises a helpful error message without config" do
-    assert_config_error(:merchant_id, fn ->
-      HTTP.build_url("customer", [])
-    end)
-  end
-
-  test "encode_body/1 converts the request body to xml" do
-    params = %{company: "Soren", first_name: "Parker"}
-
-    assert [xml_tag | nodes] = params |> HTTP.encode_body() |> String.split("\n")
-
-    assert xml_tag == ~s|<?xml version="1.0" encoding="UTF-8" ?>|
-    assert ~s|<company>Soren</company>| in nodes
-    assert ~s|<first-name>Parker</first-name>| in nodes
-  end
-
-  test "encode_body/1 ignores empty bodies" do
-    assert HTTP.encode_body("") == ""
-    assert HTTP.encode_body(%{}) == ""
-  end
-
-  test "decode_body/1 converts the request back from xml" do
-    xml =
-      compress(~s|<?xml version="1.0" encoding="UTF-8" ?>\n<company><name>Soren</name></company>|)
-
-    assert HTTP.decode_body(xml) == %{"company" => %{"name" => "Soren"}}
-  end
-
-  test "decode_body/1 safely handles empty responses" do
-    assert HTTP.decode_body(compress("")) == %{}
-    assert HTTP.decode_body(compress(" ")) == %{}
-  end
-
-  test "decode_body/1 logs unhandled errors" do
-    assert capture_log(fn ->
-             HTTP.decode_body("asdf")
-           end) =~ "unprocessable response"
-  end
-
-  test "build_options/0 sets default timeouts" do
-    options = HTTP.build_options([])
-
-    assert :with_body in options
-    assert {:recv_timeout, 30_000} in options
-    assert {:connect_timeout, 10_000} in options
-  end
-
-  test "build_options/0 allows overriding timeout defaults via config" do
-    with_applicaton_config(:http_options, [recv_timeout: 15_000, connect_timeout: 5_000], fn ->
-      options = HTTP.build_options([])
-
-      assert :with_body in options
-      assert {:recv_timeout, 15_000} in options
-      assert {:connect_timeout, 5_000} in options
-    end)
-  end
-
-  test "build_options/0 merges custom options with defaults" do
-    with_applicaton_config(:http_options, [recv_timeout: 20_000, custom_option: :value], fn ->
-      options = HTTP.build_options([])
-
-      assert :with_body in options
-      assert {:recv_timeout, 20_000} in options
-      assert {:connect_timeout, 10_000} in options
-      assert {:custom_option, :value} in options
-    end)
-  end
-
-  test "build_options/1 adds the cacertfile for production" do
-    options = HTTP.build_options(url: "https://api.braintreegateway.com/merchants/123foo/")
-
-    assert {:ssl_options, ssl_options} = :lists.keyfind(:ssl_options, 1, options)
-    ssl_options = Map.new(ssl_options)
-    assert %{cacertfile: _} = ssl_options
-    assert %{server_name_indication: ~c"api.braintreegateway.com"} = ssl_options
-    assert %{verify: :verify_peer} = ssl_options
-  end
-
-  test "build_options/1 adds the cacertfile for sandbox" do
-    options =
-      HTTP.build_options(url: "https://api.sandbox.braintreegateway.com/merchants/123foo/")
-
-    assert {:ssl_options, ssl_options} = :lists.keyfind(:ssl_options, 1, options)
-    ssl_options = Map.new(ssl_options)
-    assert %{cacertfile: _} = ssl_options
-    assert %{server_name_indication: ~c"api.sandbox.braintreegateway.com"} = ssl_options
-    assert %{verify: :verify_peer} = ssl_options
-  end
-
-  test "build_options/1 does not add the cacertfile for other endpoints" do
-    options = HTTP.build_options(url: "http://localhost:5000/merchants/123foo/")
-
-    refute :lists.keyfind(:ssl_options, 1, options)
-  end
-
-  describe "request/3" do
-    test "unauthorized response with an invalid merchant id" do
-      with_applicaton_config(:merchant_id, "junkmerchantid", fn ->
-        assert {:error, :unauthorized} = HTTP.request(:get, "customers")
-      end)
-    end
-  end
-
-  describe "telemetry events from request" do
-    setup do
-      on_exit(fn -> :telemetry.detach("braintree-testing") end)
-
-      {:ok, bypass: Bypass.open()}
-    end
-
-    test "emits a start and stop message on a successful request", %{bypass: bypass} do
-      Enum.each([200, 422, 500], fn code ->
-        with_applicaton_config(:sandbox_endpoint, "localhost:#{bypass.port}/", fn ->
-          with_applicaton_config(:merchant_id, "junkmerchantid", fn ->
-            path = "foo#{code}"
-
-            body =
-              case code do
-                200 ->
-                  ~s|<?xml version="1.0" encoding="UTF-8" ?>\n<company><name>Soren</name></company>|
-
-                _ ->
-                  ~s|<?xml version="1.0" encoding="UTF-8" ?>\n<api_error_response><message>Test Error</message></api_error_response>|
-              end
-
-            Bypass.stub(bypass, "POST", "/junkmerchantid/foo#{code}", fn conn ->
-              Plug.Conn.resp(conn, code, compress(body))
-            end)
-
-            Handler.attach()
-
-            HTTP.request(:post, path, %{})
-
-            assert_receive {:event, [:braintree, :request, :start], %{system_time: _},
-                            %{method: :post, path: _}}
-
-            assert_receive {:event, [:braintree, :request, :stop], %{duration: _},
-                            %{method: :post, path: _, http_status: _}}
-          end)
+          response
         end)
-      end)
-    end
 
-    test "emits an error event on exception", %{bypass: bypass} do
-      with_applicaton_config(:sandbox_endpoint, "localhost:#{bypass.port}/", fn ->
-        with_applicaton_config(:merchant_id, "junkmerchantid", fn ->
-          Bypass.down(bypass)
-
-          Handler.attach()
-
-          HTTP.request(:post, "/junkmerchant/foo", %{})
-
-          assert_receive {:event, [:braintree, :request, :start], %{system_time: _},
-                          %{method: :post, path: "/junkmerchant/foo"}}
-
-          assert_receive {:event, [:braintree, :request, :error], %{duration: _},
-                          %{method: :post, path: "/junkmerchant/foo", error: :econnrefused}}
+        Test.HTTP.with_mock_adapter(fn ->
+          assert apply(HTTP, unquote(test_method), [request_path]) == response
         end)
-      end)
+      end
     end
-  end
 
-  describe "build_headers/1" do
-    test "building an auth header from application config" do
-      with_applicaton_config(:private_key, "the_private_key", fn ->
-        with_applicaton_config(:public_key, "the_public_key", fn ->
-          {_, auth_header} = List.keyfind(HTTP.build_headers([]), "Authorization", 0)
+    describe "#{test_method}/2" do
+      test "passes the body and delegates to the configured adapter" do
+        payload = %{ima: "lil-teapot"}
+        request_path = "/customers"
+        response = {:ok, %{"foo" => "bar"}}
 
-          assert auth_header == "Basic dGhlX3B1YmxpY19rZXk6dGhlX3ByaXZhdGVfa2V5"
+        Test.HTTP.expect_request(fn method, path, body, opts ->
+          assert method == unquote(test_method)
+          assert path == request_path
+          assert body == payload
+          assert opts == []
+
+          response
         end)
-      end)
+
+        Test.HTTP.with_mock_adapter(fn ->
+          assert apply(HTTP, unquote(test_method), [request_path, payload]) == response
+        end)
+      end
     end
 
-    test "building an auth header from only an access token" do
-      with_applicaton_config(:access_token, "special_access_token", fn ->
-        {_, auth_header} = List.keyfind(HTTP.build_headers([]), "Authorization", 0)
+    describe "#{test_method}/3" do
+      test "passes the options and delegates to the configured adapter" do
+        payload = %{ima: "lil-teapot"}
+        request_path = "/customers"
+        response = {:ok, %{"foo" => "bar"}}
+        opts = [timeout: 500]
 
-        assert auth_header == "Bearer special_access_token"
-      end)
-    end
+        Test.HTTP.expect_request(fn method, path, body, opts ->
+          assert method == unquote(test_method)
+          assert path == request_path
+          assert body == payload
+          assert opts == opts
 
-    test "building an auth header from provided options" do
-      headers =
-        HTTP.build_headers(
-          access_token: nil,
-          private_key: "dynamic_key",
-          public_key: "dyn_pub_key"
-        )
+          response
+        end)
 
-      {_, auth_header} = List.keyfind(headers, "Authorization", 0)
-
-      assert auth_header == "Basic ZHluX3B1Yl9rZXk6ZHluYW1pY19rZXk="
-    end
-
-    test "build_headers/1 raises a helpful error message without config" do
-      assert_config_error(:public_key, fn ->
-        HTTP.build_headers([])
-      end)
-    end
-  end
-
-  describe "code_to_reason/1" do
-    test "supports common HTTP statuses" do
-      for {status, reason} <- [
-            {400, :bad_request},
-            {401, :unauthorized},
-            {403, :forbidden},
-            {404, :not_found},
-            {406, :not_acceptable},
-            {422, :unprocessable_entity},
-            {426, :upgrade_required},
-            {429, :too_many_requests},
-            {500, :server_error},
-            {501, :not_implemented},
-            {502, :bad_gateway},
-            {503, :service_unavailable},
-            {504, :connect_timeout}
-          ] do
-        assert HTTP.code_to_reason(status) == reason
+        Test.HTTP.with_mock_adapter(fn ->
+          assert apply(
+                   HTTP,
+                   unquote(test_method),
+                   [request_path, payload, opts]
+                 ) == response
+        end)
       end
     end
   end
 
-  defp compress(string), do: :zlib.gzip(string)
+  describe "request/2" do
+    test "delegates to the configured adapter" do
+      response = {:ok, %{}}
 
-  defp assert_config_error(key, fun) do
-    value = Braintree.get_env(key)
+      Test.HTTP.expect_request(fn method, path ->
+        assert method == :get
+        assert path == "customers"
 
-    try do
-      Application.delete_env(:braintree, key)
-      assert_raise ConfigError, "missing config for :#{key}", fun
-    after
-      Braintree.put_env(key, value)
+        response
+      end)
+
+      Test.HTTP.with_mock_adapter(fn ->
+        assert HTTP.request(:get, "customers") == response
+      end)
+    end
+  end
+
+  describe "request/3" do
+    test "delegates to the configured adapter" do
+      response = {:ok, %{}}
+
+      Test.HTTP.expect_request(fn method, path, opts ->
+        assert method == :get
+        assert path == "customers"
+        assert opts == [foo: "yes"]
+
+        response
+      end)
+
+      Test.HTTP.with_mock_adapter(fn ->
+        assert HTTP.request(:get, "customers", foo: "yes") == response
+      end)
+    end
+  end
+
+  describe "request/4" do
+    test "delegates to the configured adapter" do
+      response = {:ok, %{}}
+
+      Test.HTTP.expect_request(fn method, path, body, opts ->
+        assert method == :get
+        assert path == "customers"
+        assert body == "ima-body"
+        assert opts == [foo: "yes"]
+
+        response
+      end)
+
+      Test.HTTP.with_mock_adapter(fn ->
+        assert HTTP.request(:get, "customers", "ima-body", foo: "yes") == response
+      end)
     end
   end
 end

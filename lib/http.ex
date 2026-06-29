@@ -16,12 +16,12 @@ defmodule Braintree.HTTP do
   runtime. All those config values support the `{:system, "VAR_NAME"}` as a
   value - in which case the value will be read from the system environment with
   `System.get_env("VAR_NAME")`.
+
+  Hackney is used by default as the HTTP adapter. You can change this by
+  setting the `:http_adapter` config value to the adapter you wish to use.
   """
 
-  require Logger
-
-  alias Braintree.ErrorResponse, as: Error
-  alias Braintree.XML.{Decoder, Encoder}
+  alias Braintree.HTTP.HackneyAdapter
 
   @type error ::
           {:error, atom}
@@ -30,33 +30,37 @@ defmodule Braintree.HTTP do
 
   @type response :: {:ok, map} | error
 
-  @production_endpoint "https://api.braintreegateway.com/"
-  @cacertfile "/certs/api_braintreegateway_com.ca.crt"
-  @sandbox_endpoint "https://api.sandbox.braintreegateway.com/"
+  @type adapter_config :: %{
+          module: atom(),
+          options: keyword()
+        }
 
-  @headers [
-    {"Accept", "application/xml"},
-    {"User-Agent", "Braintree Elixir/0.1"},
-    {"Accept-Encoding", "gzip"},
-    {"X-ApiVersion", "4"},
-    {"Content-Type", "application/xml"}
-  ]
+  @doc """
+  Returns the currently configured adapter. This is runtime safe
+  so any changes to the config will be reflected here in real time.
+  """
+  @spec adapter() :: atom()
+  def adapter do
+    Braintree.get_env(:http_adapter, HackneyAdapter)
+  end
 
-  @statuses %{
-    400 => :bad_request,
-    401 => :unauthorized,
-    403 => :forbidden,
-    404 => :not_found,
-    406 => :not_acceptable,
-    422 => :unprocessable_entity,
-    426 => :upgrade_required,
-    429 => :too_many_requests,
-    500 => :server_error,
-    501 => :not_implemented,
-    502 => :bad_gateway,
-    503 => :service_unavailable,
-    504 => :connect_timeout
-  }
+  @doc """
+  Returns the configuration options for the current adapter.
+  """
+  @spec adapter_options() :: keyword()
+  def adapter_options do
+    Braintree.get_env(:http_options, [])
+  end
+
+  @doc """
+  Returns the host portion of the URI for production.
+  """
+  def production_host, do: Braintree.get_env(:production_endpoint)
+
+  @doc """
+  Returns the host portion of the URI for non-prod environments.
+  """
+  def sandbox_host, do: Braintree.get_env(:sandbox_endpoint)
 
   @doc """
   Centralized request handling function. All convenience structs use this
@@ -73,71 +77,17 @@ defmodule Braintree.HTTP do
         end
       end
   """
-  @spec request(atom, binary, binary | map, Keyword.t()) :: response
-  def request(method, path, body \\ %{}, opts \\ []) do
-    emit_start(method, path)
+  def request(method, path), do: adapter().request(method, path)
 
-    start_time = System.monotonic_time()
+  def request(method, path, body_or_opts) do
+    adapter().request(method, path, body_or_opts)
+  end
 
-    try do
-      url = build_url(path, opts)
-
-      :hackney.request(
-        method,
-        url,
-        build_headers(opts),
-        encode_body(body),
-        build_options([{:url, url} | opts])
-      )
-    catch
-      kind, reason ->
-        duration = System.monotonic_time() - start_time
-
-        emit_exception(duration, method, path, %{
-          kind: kind,
-          reason: reason,
-          stacktrace: __STACKTRACE__
-        })
-
-        :erlang.raise(kind, reason, __STACKTRACE__)
-    else
-      {:ok, code, _headers, body} when code in 200..299 ->
-        duration = System.monotonic_time() - start_time
-        emit_stop(duration, method, path, code)
-        {:ok, decode_body(body)}
-
-      {:ok, code, _headers, _body} when code in 300..399 ->
-        duration = System.monotonic_time() - start_time
-        emit_stop(duration, method, path, code)
-        {:ok, ""}
-
-      {:ok, 422, _headers, body} ->
-        duration = System.monotonic_time() - start_time
-        emit_stop(duration, method, path, 422)
-
-        {
-          :error,
-          body
-          |> decode_body()
-          |> resolve_error_response()
-        }
-
-      {:ok, code, _headers, _body} when code in 400..504 ->
-        duration = System.monotonic_time() - start_time
-        emit_stop(duration, method, path, code)
-        {:error, code_to_reason(code)}
-
-      {:error, reason} ->
-        duration = System.monotonic_time() - start_time
-        emit_error(duration, method, path, reason)
-        {:error, reason}
-    end
+  def request(method, path, body, opts) do
+    adapter().request(method, path, body, opts)
   end
 
   for method <- ~w(get delete post put)a do
-    @spec unquote(method)(binary) :: response
-    @spec unquote(method)(binary, map | list) :: response
-    @spec unquote(method)(binary, map, list) :: response
     def unquote(method)(path) do
       request(unquote(method), path, %{}, [])
     end
@@ -153,162 +103,5 @@ defmodule Braintree.HTTP do
     def unquote(method)(path, payload, opts) do
       request(unquote(method), path, payload, opts)
     end
-  end
-
-  ## Helper Functions
-
-  @doc false
-  @spec build_url(binary, Keyword.t()) :: binary
-  def build_url(path, opts) do
-    environment = opts |> get_lazy_env(:environment) |> maybe_to_atom()
-    merchant_id = get_lazy_env(opts, :merchant_id)
-
-    Keyword.fetch!(endpoints(), environment) <> merchant_id <> "/" <> path
-  end
-
-  defp maybe_to_atom(value) when is_binary(value), do: String.to_existing_atom(value)
-  defp maybe_to_atom(value) when is_atom(value), do: value
-
-  @doc false
-  @spec encode_body(binary | map) :: binary
-  def encode_body(body) when body == "" or body == %{}, do: ""
-  def encode_body(body), do: Encoder.dump(body)
-
-  @doc false
-  @spec decode_body(binary) :: map
-  def decode_body(body) do
-    body
-    |> :zlib.gunzip()
-    |> String.trim()
-    |> Decoder.load()
-  rescue
-    ErlangError -> Logger.error("unprocessable response")
-  end
-
-  @doc false
-  @spec build_headers(Keyword.t()) :: [tuple]
-  def build_headers(opts) do
-    auth_header =
-      case get_lazy_env(opts, :access_token, :none) do
-        token when is_binary(token) ->
-          "Bearer " <> token
-
-        _ ->
-          username = get_lazy_env(opts, :public_key)
-          password = get_lazy_env(opts, :private_key)
-
-          "Basic " <> :base64.encode("#{username}:#{password}")
-      end
-
-    [{"Authorization", auth_header} | @headers]
-  end
-
-  defp get_lazy_env(opts, key, default \\ nil) do
-    Keyword.get_lazy(opts, key, fn -> Braintree.get_env(key, default) end)
-  end
-
-  @doc false
-  @spec build_options(Keyword.t()) :: [...]
-  def build_options(opts) do
-    http_opts =
-      :http_options
-      |> Braintree.get_env([])
-      |> Keyword.put_new(:recv_timeout, 30_000)
-      |> Keyword.put_new(:connect_timeout, 10_000)
-
-    [:with_body] ++ ssl_opts(opts) ++ http_opts
-  end
-
-  defp ssl_opts(opts) do
-    case opts[:url] do
-      @production_endpoint <> _ ->
-        [
-          ssl_options: [
-            verify: :verify_peer,
-            # avoid bug in hackney 1.23.0 that compares SSL hostname to resolved IP
-            server_name_indication: String.to_charlist("api.braintreegateway.com"),
-            cacertfile:
-              get_lazy_env(opts, :cacertfile, fn ->
-                Path.join(:code.priv_dir(:braintree), @cacertfile)
-              end)
-          ]
-        ]
-
-      @sandbox_endpoint <> _ ->
-        [
-          ssl_options: [
-            verify: :verify_peer,
-            # avoid bug in hackney 1.23.0 that compares SSL hostname to resolved IP
-            server_name_indication: String.to_charlist("api.sandbox.braintreegateway.com"),
-            cacertfile:
-              get_lazy_env(opts, :sandbox_cacertfile, fn ->
-                Path.join(:code.priv_dir(:braintree), @cacertfile)
-              end)
-          ]
-        ]
-
-      _ ->
-        []
-    end
-  end
-
-  @doc false
-  @spec code_to_reason(integer) :: atom
-  def code_to_reason(integer)
-
-  for {code, status} <- @statuses do
-    def code_to_reason(unquote(code)), do: unquote(status)
-  end
-
-  defp resolve_error_response(%{"api_error_response" => api_error_response}) do
-    Error.new(api_error_response)
-  end
-
-  defp resolve_error_response(%{"unprocessable_entity" => _}) do
-    Error.new(%{message: "Unprocessable Entity"})
-  end
-
-  defp endpoints do
-    [production: @production_endpoint <> "merchants/", sandbox: sandbox_endpoint()]
-  end
-
-  defp sandbox_endpoint do
-    Application.get_env(
-      :braintree,
-      :sandbox_endpoint,
-      @sandbox_endpoint <> "merchants/"
-    )
-  end
-
-  defp emit_start(method, path) do
-    :telemetry.execute(
-      [:braintree, :request, :start],
-      %{system_time: System.system_time()},
-      %{method: method, path: path}
-    )
-  end
-
-  defp emit_exception(duration, method, path, error_data) do
-    :telemetry.execute(
-      [:braintree, :request, :exception],
-      %{duration: duration},
-      %{method: method, path: path, error: error_data}
-    )
-  end
-
-  defp emit_error(duration, method, path, error_reason) do
-    :telemetry.execute(
-      [:braintree, :request, :error],
-      %{duration: duration},
-      %{method: method, path: path, error: error_reason}
-    )
-  end
-
-  defp emit_stop(duration, method, path, code) do
-    :telemetry.execute(
-      [:braintree, :request, :stop],
-      %{duration: duration},
-      %{method: method, path: path, http_status: code}
-    )
   end
 end
