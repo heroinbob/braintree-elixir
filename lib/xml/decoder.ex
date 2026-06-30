@@ -92,6 +92,7 @@ defmodule Braintree.XML.Decoder do
 
   defp is_text_list?([last]) when is_binary(last), do: true
   defp is_text_list?([hd | rest]) when is_binary(hd), do: is_text_list?(rest)
+  # credo:disable-for-next-line
   defp is_text_list?(_), do: false
 
   defp without_nil(list), do: Enum.reject(list, &is_nil/1)

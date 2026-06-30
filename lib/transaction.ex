@@ -66,6 +66,7 @@ defmodule Braintree.Transaction do
           voice_referral_number: String.t()
         }
 
+  # credo:disable-for-next-line
   defstruct add_ons: [],
             additional_processor_response: nil,
             amount: "0",
