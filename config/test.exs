@@ -14,8 +14,4 @@ adapter = Map.fetch!(adapter_lookup, adapter)
 
 config :braintree,
   environment: :sandbox,
-  http_adapter: adapter,
-  master_merchant_id: System.get_env("BRAINTREE_MASTER_MERCHANT_ID"),
-  merchant_id: System.get_env("BRAINTREE_MERCHANT_ID"),
-  private_key: System.get_env("BRAINTREE_PRIVATE_KEY"),
-  public_key: System.get_env("BRAINTREE_PUBLIC_KEY")
+  http_adapter: adapter
