@@ -17,7 +17,7 @@ defmodule Braintree.Mixfile do
       deps: deps(),
       docs: docs(),
       dialyzer: [
-        flags: [:unmatched_returns, :error_handling, :race_conditions]
+        flags: [:unmatched_returns, :error_handling]
       ]
     ]
   end
