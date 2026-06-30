@@ -7,6 +7,10 @@ config :braintree,
   private_key: System.get_env("BRAINTREE_PRIVATE_KEY"),
   public_key: System.get_env("BRAINTREE_PUBLIC_KEY")
 
+if Mix.env() == :test do
+  import_config "test.exs"
+end
+
 try do
   import_config "#{Mix.env()}.secret.exs"
 rescue
