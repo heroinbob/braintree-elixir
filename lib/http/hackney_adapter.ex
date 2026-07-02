@@ -1,8 +1,16 @@
-# Only include when :hackney is available.
+# Only include when :hackney is available and it should be included.
 is_compiled = Code.ensure_compiled(:hackney) == {:module, :hackney}
-not_excluded = :hackney not in Application.compile_env(:braintree, :exclude_from_compilation, [])
 
-if is_compiled and not_excluded do
+compilation_setting =
+  Application.compile_env(
+    :braintree,
+    :compilation,
+    :include_available_adapters
+  )
+
+is_included = compilation_setting in [:include_hackney_only, :include_available_adapters]
+
+if is_compiled and is_included do
   defmodule Braintree.HTTP.HackneyAdapter do
     @moduledoc """
     HTTP adapter that relies on Hackney for transport.

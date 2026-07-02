@@ -1,8 +1,16 @@
-# Only include the ReqAdapter when Req is available in the project.
+# Only include when Req is available and it should be included.
 is_compiled = Code.ensure_compiled(Req) == {:module, Req}
-not_excluded = :req not in Application.compile_env(:braintree, :exclude_from_compilation, [])
 
-if is_compiled and not_excluded do
+compilation_setting =
+  Application.compile_env(
+    :braintree,
+    :compilation,
+    :include_available_adapters
+  )
+
+is_included = compilation_setting in [:include_req_only, :include_available_adapters]
+
+if is_compiled and is_included do
   defmodule Braintree.HTTP.ReqAdapter do
     @moduledoc """
     HTTP adapter that relies on Req for transport.

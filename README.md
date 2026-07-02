@@ -162,37 +162,84 @@ If an exception is raised during the Hackney call, an exception event will be fi
  meta data:     %{method: method, path: path, kind: error_type, reason: error_message, stacktrace: stacktrace}
 ```
 
-## Custom HTTP Adapter
+## HTTP Adapter
 
-The HTTP adapter is configurable and you can change it to whatever you wish. Hackney and Req
-are supported and the adapter is only compiled into the project when it's dependency is defined.
-You only need to define a dependency if the adapter you want to use requires one.
+Hackney is the default HTTP dependency used to make HTTP requests. If your project uses something
+else then you can configure it.
 
-### Choices
+Req is optionally available, however you can also provide your own if that is not suitable.
 
-`HackneyAdapter` is the default. It relies on `:hackney` which means you only need to specify it in the dependencies
-and everything will work without additional configuration.
+### How to Configure
 
-`ReqAdapter` is available and relies on `Req`. To use it you must specify `:req` in
-the dependencies and set the `:http_adapter` config option. You can also specify `:http_options` to pass
-adapter specific options. Here's a sample configuration with `ReqAdapter` that provides
-retries on request errors:
+In order to be efficient the hackney and req dependencies are marked as optional. The adapters
+themselves are only compiled when 1) the dependency is available and 2) the configuration
+does not exclude it from compilation.
+
+This way if you're relying on hackney or req then only the code and dependency you need is compiled
+into your application. It also provides a way to include all of them and more if you wish.
+
+Here is an example of configuring your application to use req only. Since hackney is not available
+as a dependency that adapter is not compiled. In the example `:http_options` are also included
+to demonstrate how to pass options that req supports.
 
 ```elixir
 def deps do
-  [{:braintree, "~> 0.16"}, {:req "~> 0.6"}]
+  [
+    {:braintree, "~> 0.16"},
+    {:req "~> 0.6"}
+  ]
 end
 
+# Use Req. Also specify Req options via `:http_options`.
 config :braintree,
-    http_adapter: Braintree.HTTP.ReqAdapter,
+    http_adapter: :req,
     http_options: [
         retry: :safe_transient, max_retries: 3
     ]
 ```
 
-For anything other than Hackney or Req you'll need to create your own. To do so you must
-implement the `Braintree.HTTP.AdapterBehaviour` and configure the app using your adapter
-and any dependencies as needed.
+### Custom Adapter
+
+To use a custom adapter you'll need to create one and configure it. You must
+implement the `Braintree.HTTP.AdapterBehaviour` in your code and define any
+dependencies as needed.
+
+You must specify the module that you wish to use as the `:http_adapter` value.
+
+For example:
+
+```elixir
+def deps do
+  [
+    {:braintree, "~> 0.16"},
+    {:freebird "~> 1.2.3"}
+  ]
+end
+
+config :braintree,
+    http_adapter: MyApp.FreebirdAdapter
+```
+
+### Apps that use Hackney and Req
+
+It's possible that in an umbrella app, or even in a solo app, you may have
+Hackney and Req installed as dependencies thanks to other libraries and apps.
+
+In this case both adapters would be compiled into your app. In order to
+ensure you only compile the code you use, you'll need to specify it. You
+can specify one, or none if you're using your own adapter.
+
+```elixir
+# Compile hackney only. Specify :include_req_only if using that.
+config :braintree,
+    compilation: :include_hackney_only,
+    http_adapter: :hackney
+
+# Don't compile Hackney or Req into the app. A custom adapter is needed.
+config :braintree,
+    compilation: :no_adapters,
+    http_adapter: MyApp.MyAdapter
+```
 
 ## Testing
 

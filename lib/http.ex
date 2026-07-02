@@ -21,8 +21,6 @@ defmodule Braintree.HTTP do
   setting the `:http_adapter` config value to the adapter you wish to use.
   """
 
-  alias Braintree.HTTP.HackneyAdapter
-
   @type error ::
           {:error, atom}
           | {:error, Error.t()}
@@ -41,7 +39,11 @@ defmodule Braintree.HTTP do
   """
   @spec adapter() :: atom()
   def adapter do
-    Braintree.get_env(:http_adapter, HackneyAdapter)
+    case Braintree.get_env(:http_adapter, :hackney) do
+      :hackney -> Braintree.HTTP.HackneyAdapter
+      :req -> Braintree.HTTP.ReqAdapter
+      custom -> custom
+    end
   end
 
   @doc """
