@@ -84,7 +84,6 @@ defmodule Braintree.HTTP.Requests do
   """
   @spec build_url(binary, Keyword.t()) :: binary
   def build_url(path, opts) do
-    # environment = opts |> get_lazy_env(:environment) |> maybe_to_atom()
     environment = get_environment(opts)
     merchant_id = get_lazy_env(opts, :merchant_id)
 
