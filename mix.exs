@@ -17,7 +17,7 @@ defmodule Braintree.Mixfile do
       deps: deps(),
       docs: docs(),
       dialyzer: [
-        flags: [:unmatched_returns, :error_handling, :race_conditions]
+        flags: [:unmatched_returns, :error_handling]
       ]
     ]
   end
@@ -52,13 +52,15 @@ defmodule Braintree.Mixfile do
 
   defp deps do
     [
-      {:hackney, "~> 1.15"},
-      {:plug, "~> 1.12"},
-      {:telemetry, "~> 1.0 or ~> 0.4"},
-      {:ex_doc, "~> 0.25", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.1", only: [:dev, :test], runtime: false},
-      {:bypass, "~> 2.1", only: :test}
+      {:hackney, ">= 1.15.0", optional: true},
+      {:plug, ">= 1.12.0"},
+      {:req, ">= 0.6.0", optional: true},
+      {:telemetry, "~> 1.3"},
+      {:bypass, "~> 2.1", only: :test},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.31", only: [:dev, :test], runtime: false},
+      {:hammox, "~> 0.7", only: :test}
     ]
   end
 

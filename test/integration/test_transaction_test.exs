@@ -1,8 +1,8 @@
 defmodule Braintree.Integration.TestTransactionTest do
   use ExUnit.Case, async: true
 
-  alias Braintree.Transaction
   alias Braintree.Testing.{Nonces, TestTransaction}
+  alias Braintree.Transaction
 
   @moduletag :integration
 

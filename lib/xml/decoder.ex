@@ -62,7 +62,7 @@ defmodule Braintree.XML.Decoder do
       |> List.first()
 
   defp transform(elements) when is_list(elements) do
-    if is_text_list?(elements) do
+    if text_list?(elements) do
       Enum.join(elements, " ")
     else
       Enum.into(without_nil(elements), %{}, &transform/1)
@@ -90,9 +90,9 @@ defmodule Braintree.XML.Decoder do
 
   defp transform({name, _, values}), do: {name, transform(values)}
 
-  defp is_text_list?([last]) when is_binary(last), do: true
-  defp is_text_list?([hd | rest]) when is_binary(hd), do: is_text_list?(rest)
-  defp is_text_list?(_), do: false
+  defp text_list?([last]) when is_binary(last), do: true
+  defp text_list?([hd | rest]) when is_binary(hd), do: text_list?(rest)
+  defp text_list?(_), do: false
 
   defp without_nil(list), do: Enum.reject(list, &is_nil/1)
 

@@ -18,7 +18,7 @@ jobs:
               elixir: '1.16'
               otp: '26.1'
             lint: lint
-            exclude_tags: 'nothing'
+            exclude_tags: 'integration'
 
     runs-on: ubuntu-latest
 
@@ -30,7 +30,7 @@ jobs:
           otp-version: ${{matrix.pair.otp}}
           elixir-version: ${{matrix.pair.elixir}}
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v5
         with:
           path: |
             deps
